@@ -283,6 +283,29 @@ class WebChatService {
     print('🗑️ All chat history cleared');
   }
 
+  Future<void> deleteConversation(int conversationId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final conversations = await _getStoredConversations();
+
+    // Remove the specific conversation from the list
+    conversations.removeWhere((conv) => conv['id'] == conversationId);
+
+    // Update stored conversations
+    await prefs.setString(_conversationsKey, jsonEncode(conversations));
+
+    // Remove messages for this conversation
+    final messagesKey = '$_messagesPrefix$conversationId';
+    await prefs.remove(messagesKey);
+
+    // If this was the current conversation, clear current conversation
+    if (_currentConversationId == conversationId) {
+      await prefs.remove(_currentConversationKey);
+      _currentConversationId = null;
+    }
+
+    print('🗑️ Conversation $conversationId deleted');
+  }
+
   Future<bool> isOfflineMode() async {
     try {
       await _n8nAPI.postPrompt(message: "test");

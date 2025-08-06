@@ -715,8 +715,10 @@ _Jika masalah berlanjut, hubungi administrator sistem._
   // Method untuk hapus conversation
   Future<void> _deleteConversation(Map<String, dynamic> conversation) async {
     try {
-      // TODO: Implement delete conversation method in WebChatService
-      // For now, just remove from local list
+      // Delete from storage using WebChatService
+      await _chatService.deleteConversation(conversation['id']);
+
+      // Remove from local list
       setState(() {
         _conversationHistory.removeWhere(
           (conv) => conv['id'] == conversation['id'],
@@ -726,14 +728,16 @@ _Jika masalah berlanjut, hubungi administrator sistem._
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Percakapan berhasil dihapus'),
-          backgroundColor: AppColors.accent,
+          backgroundColor: AppColors.success,
         ),
       );
+
+      print('✅ Conversation ${conversation['id']} deleted successfully');
     } catch (e) {
       print('❌ Error deleting conversation: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error menghapus percakapan'),
+          content: Text('Gagal menghapus percakapan: $e'),
           backgroundColor: AppColors.error,
         ),
       );
