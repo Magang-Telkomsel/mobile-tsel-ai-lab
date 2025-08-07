@@ -958,6 +958,7 @@ _Jika masalah berlanjut, hubungi administrator sistem._
                                   }
                                   return ModernMessageBubble(
                                     message: messages[index],
+                                    provider: _selectedProvider,
                                   );
                                 },
                               ),

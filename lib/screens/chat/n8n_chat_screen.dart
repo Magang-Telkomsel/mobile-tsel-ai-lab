@@ -613,6 +613,10 @@ _Jika masalah berlanjut, hubungi administrator sistem._
 
   Future<void> _deleteConversation(Map<String, dynamic> conversation) async {
     try {
+      // Delete from storage using WebChatService
+      await _chatService.deleteConversation(conversation['id']);
+
+      // Remove from local list
       setState(() {
         _conversationHistory.removeWhere(
           (conv) => conv['id'] == conversation['id'],
@@ -622,14 +626,16 @@ _Jika masalah berlanjut, hubungi administrator sistem._
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Percakapan berhasil dihapus'),
-          backgroundColor: AppColors.accent,
+          backgroundColor: AppColors.success,
         ),
       );
+
+      print('✅ N8N Conversation ${conversation['id']} deleted successfully');
     } catch (e) {
       print('❌ Error deleting N8N conversation: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error menghapus percakapan'),
+          content: Text('Gagal menghapus percakapan: $e'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -777,19 +783,6 @@ _Jika masalah berlanjut, hubungi administrator sistem._
           actions: [
             Container(
               margin: EdgeInsets.only(right: 16),
-              padding: EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.primaryBackground,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.gradientStart.withOpacity(0.1),
-                    spreadRadius: 0,
-                    blurRadius: 4,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
               child: Image.asset(
                 'assets/images/tsel.png',
                 height: 52,
@@ -798,14 +791,10 @@ _Jika masalah berlanjut, hubungi administrator sistem._
                   return Container(
                     height: 52,
                     width: 52,
-                    decoration: BoxDecoration(
-                      color: AppColors.gradientStart,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
                     child: Icon(
                       Icons.business,
-                      size: 14,
-                      color: AppColors.whiteText,
+                      size: 24,
+                      color: AppColors.gradientStart,
                     ),
                   );
                 },
@@ -850,6 +839,7 @@ _Jika masalah berlanjut, hubungi administrator sistem._
                                   }
                                   return ModernMessageBubble(
                                     message: messages[index],
+                                    provider: 'N8N',
                                   );
                                 },
                               ),
@@ -915,10 +905,22 @@ _Jika masalah berlanjut, hubungi administrator sistem._
                               color: AppColors.whiteText,
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: Icon(
-                              Icons.hub_outlined,
-                              color: AppColors.gradientMiddle,
-                              size: 24,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                padding: EdgeInsets.all(6),
+                                child: Image.asset(
+                                  'assets/images/n8n-logo-1.png',
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Icon(
+                                      Icons.hub_rounded,
+                                      color: AppColors.gradientEnd,
+                                      size: 24,
+                                    );
+                                  },
+                                ),
+                              ),
                             ),
                           ),
                           SizedBox(width: 12),

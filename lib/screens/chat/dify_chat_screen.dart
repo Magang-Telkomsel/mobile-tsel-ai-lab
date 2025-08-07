@@ -5,9 +5,11 @@ import 'package:difychatbot/services/dify/dify_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/chat_message.dart';
 import '../../models/me_response.dart';
 import '../../components/index.dart';
+import '../../services/web_chat_service.dart';
 
 class DifyChatScreen extends StatefulWidget {
   @override
@@ -21,10 +23,13 @@ class _DifyChatScreenState extends State<DifyChatScreen> {
   // Services
   final meAPI _meAPI = meAPI();
   final DifyService _difyService = DifyService();
+  final WebChatService _chatService = WebChatService();
 
   // Chat state
   String _selectedModel = 'General Chat'; // Fixed model for Dify
   PlatformFile? _selectedFile; // Add file attachment capability
+  List<Map<String, dynamic>> _conversationHistory = [];
+  bool _isLoadingHistory = false;
 
   // User data variables
   UserData? currentUser;
@@ -57,6 +62,8 @@ class _DifyChatScreenState extends State<DifyChatScreen> {
             timestamp: DateTime.now().subtract(Duration(minutes: 5)),
           );
         });
+        _loadChatHistory();
+        _autoCreateNewConversationIfNeeded();
       }
     });
   }
@@ -214,6 +221,11 @@ _Jika masalah berlanjut, hubungi administrator sistem._
         );
       });
 
+      // Save to chat history
+      if (currentUser != null) {
+        await _saveChatToHistory(userMessage, textResponse);
+      }
+
       _scrollToBottom();
     } catch (e) {
       print('❌ Error in _sendMessage: $e');
@@ -345,7 +357,21 @@ _Jika masalah berlanjut, hubungi administrator sistem._
     });
 
     try {
-      // Simulate new conversation creation for Dify
+      if (currentUser != null) {
+        // Reset current conversation
+        _chatService.setCurrentConversation(0);
+
+        // Create new conversation with DIFY prefix
+        final newConversationId = await _chatService.startNewConversation(
+          userId: currentUser!.id,
+          title:
+              'DIFY Chat ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year} ${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}',
+        );
+
+        print('🆕 Created new DIFY conversation: $newConversationId');
+        await _chatService.setCurrentConversation(newConversationId);
+      }
+
       await Future.delayed(Duration(milliseconds: 500));
 
       setState(() {
@@ -361,10 +387,15 @@ _Jika masalah berlanjut, hubungi administrator sistem._
         isClearingChat = false;
       });
 
+      // Reload chat history to show new conversation
+      if (mounted) {
+        _loadChatHistory();
+      }
+
       Navigator.pop(context);
       _scrollToBottom();
     } catch (e) {
-      print('❌ Error creating new Dify conversation: $e');
+      print('❌ Error creating new DIFY conversation: $e');
       setState(() {
         isClearingChat = false;
       });
@@ -464,6 +495,255 @@ _Jika masalah berlanjut, hubungi administrator sistem._
     }
   }
 
+  // Chat history methods for DIFY
+  Future<void> _loadChatHistory() async {
+    if (currentUser == null || !mounted) return;
+
+    if (mounted) {
+      setState(() {
+        _isLoadingHistory = true;
+      });
+    }
+
+    try {
+      // Use prefix for DIFY conversations to separate from N8N
+      final history = await _chatService.getConversationHistory(
+        currentUser!.id,
+      );
+
+      // Filter only DIFY conversations by checking title prefix
+      final difyChatHistory =
+          history
+              .where(
+                (conv) =>
+                    conv['conversation_title'].toString().startsWith('DIFY'),
+              )
+              .toList();
+
+      difyChatHistory.sort((a, b) {
+        final aTime = DateTime.parse(a['updated_at'] as String);
+        final bTime = DateTime.parse(b['updated_at'] as String);
+        return bTime.compareTo(aTime);
+      });
+
+      if (mounted) {
+        setState(() {
+          _conversationHistory = difyChatHistory;
+          _isLoadingHistory = false;
+        });
+      }
+      print('📚 Loaded ${difyChatHistory.length} DIFY conversations');
+    } catch (e) {
+      print('❌ Error loading DIFY chat history: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingHistory = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadConversation(Map<String, dynamic> conversation) async {
+    try {
+      final conversationId = conversation['id'] as int;
+      final chatHistory = await _chatService.getChatHistory(conversationId);
+
+      setState(() {
+        messages.clear();
+        messages.addAll(chatHistory);
+
+        if (messages.isEmpty) {
+          messages.add(
+            ChatMessage(
+              id: '1',
+              text: getGreetingMessage(),
+              isUser: false,
+              timestamp: DateTime.now(),
+            ),
+          );
+        }
+      });
+
+      await _chatService.setCurrentConversation(conversationId);
+      print(
+        '📖 Loaded DIFY conversation: ${conversation['conversation_title']}',
+      );
+      _scrollToBottom();
+    } catch (e) {
+      print('❌ Error loading DIFY conversation: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error memuat conversation'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
+  Future<void> _saveChatToHistory(
+    String userMessage,
+    String botResponse,
+  ) async {
+    try {
+      int conversationId;
+      if (_chatService.currentConversationId == null) {
+        conversationId = await _chatService.startNewConversation(
+          userId: currentUser!.id,
+          title: _generateConversationTitle(userMessage),
+        );
+        print('📝 Started new DIFY conversation: $conversationId');
+      } else {
+        conversationId = _chatService.currentConversationId!;
+      }
+
+      await _chatService.sendMessage(
+        conversationId: conversationId,
+        message: userMessage,
+        userId: currentUser!.id,
+      );
+
+      print('💾 DIFY Chat saved to history');
+
+      if (mounted) {
+        _loadChatHistory();
+      }
+    } catch (e) {
+      print('❌ Error saving DIFY chat to history: $e');
+    }
+  }
+
+  String _generateConversationTitle(String message) {
+    final cleanMessage = message.trim();
+    String title;
+    if (cleanMessage.length <= 25) {
+      title = cleanMessage;
+    } else {
+      title = '${cleanMessage.substring(0, 25)}...';
+    }
+    // Add DIFY prefix to distinguish from N8N conversations
+    return 'DIFY: $title';
+  }
+
+  Future<void> _autoCreateNewConversationIfNeeded() async {
+    if (currentUser == null) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastProvider = prefs.getString('last_used_provider');
+      final currentTime = DateTime.now().millisecondsSinceEpoch;
+      final lastVisitTime = prefs.getInt('last_dify_visit_time') ?? 0;
+
+      final shouldCreateNew =
+          lastProvider != 'DIFY' || (currentTime - lastVisitTime) > 300000;
+
+      if (shouldCreateNew) {
+        final newConversationId = await _chatService.startNewConversation(
+          userId: currentUser!.id,
+          title:
+              'DIFY Chat ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year} ${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}',
+        );
+
+        await _chatService.setCurrentConversation(newConversationId);
+        print('🆕 Auto-created new DIFY conversation: $newConversationId');
+
+        await prefs.setString('last_used_provider', 'DIFY');
+        await prefs.setInt('last_dify_visit_time', currentTime);
+
+        _loadChatHistory();
+      } else {
+        await _chatService.loadCurrentConversation();
+        print(
+          '📖 Continuing existing DIFY conversation: ${_chatService.currentConversationId}',
+        );
+      }
+    } catch (e) {
+      print('❌ Error auto-creating DIFY conversation: $e');
+    }
+  }
+
+  String _getTimeAgo(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inDays > 7) {
+      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+    } else if (difference.inDays > 0) {
+      return '${difference.inDays} hari lalu';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours} jam lalu';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes} menit lalu';
+    } else {
+      return 'Baru saja';
+    }
+  }
+
+  void _showDeleteConversationDialog(Map<String, dynamic> conversation) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: AppColors.secondaryBackground,
+          title: Text(
+            'Hapus Percakapan',
+            style: TextStyle(color: AppColors.primaryText),
+          ),
+          content: Text(
+            'Apakah Anda yakin ingin menghapus percakapan "${conversation['conversation_title']}"?',
+            style: TextStyle(color: AppColors.secondaryText),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Batal',
+                style: TextStyle(color: AppColors.secondaryText),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _deleteConversation(conversation);
+              },
+              child: Text('Hapus', style: TextStyle(color: AppColors.error)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _deleteConversation(Map<String, dynamic> conversation) async {
+    try {
+      // Delete from storage using WebChatService
+      await _chatService.deleteConversation(conversation['id']);
+
+      // Remove from local list
+      setState(() {
+        _conversationHistory.removeWhere(
+          (conv) => conv['id'] == conversation['id'],
+        );
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Percakapan berhasil dihapus'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+
+      print('✅ DIFY Conversation ${conversation['id']} deleted successfully');
+    } catch (e) {
+      print('❌ Error deleting DIFY conversation: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal menghapus percakapan: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
@@ -528,19 +808,6 @@ _Jika masalah berlanjut, hubungi administrator sistem._
           actions: [
             Container(
               margin: EdgeInsets.only(right: 16),
-              padding: EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.primaryBackground,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.gradientStart.withOpacity(0.1),
-                    spreadRadius: 0,
-                    blurRadius: 4,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
               child: Image.asset(
                 'assets/images/tsel.png',
                 height: 52,
@@ -549,14 +816,10 @@ _Jika masalah berlanjut, hubungi administrator sistem._
                   return Container(
                     height: 52,
                     width: 52,
-                    decoration: BoxDecoration(
-                      color: AppColors.gradientStart,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
                     child: Icon(
                       Icons.business,
-                      size: 14,
-                      color: AppColors.whiteText,
+                      size: 24,
+                      color: AppColors.gradientStart,
                     ),
                   );
                 },
@@ -601,6 +864,7 @@ _Jika masalah berlanjut, hubungi administrator sistem._
                                   }
                                   return ModernMessageBubble(
                                     message: messages[index],
+                                    provider: 'DIFY',
                                   );
                                 },
                               ),
@@ -864,10 +1128,22 @@ _Jika masalah berlanjut, hubungi administrator sistem._
                               color: AppColors.whiteText,
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: Icon(
-                              Icons.psychology_outlined,
-                              color: AppColors.gradientMiddle,
-                              size: 24,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                padding: EdgeInsets.all(6),
+                                child: Image.asset(
+                                  'assets/images/dify-ai.png',
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Icon(
+                                      Icons.auto_awesome,
+                                      color: AppColors.gradientStart,
+                                      size: 24,
+                                    );
+                                  },
+                                ),
+                              ),
                             ),
                           ),
                           SizedBox(width: 12),
@@ -932,6 +1208,173 @@ _Jika masalah berlanjut, hubungi administrator sistem._
                 _debugDifyService();
               },
             ),
+
+            Container(
+              margin: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              height: 1,
+              decoration: BoxDecoration(gradient: AppColors.subtleGradient),
+            ),
+
+            // History Section
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      gradient: AppColors.subtleGradient,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.history_rounded,
+                      size: 16,
+                      color: AppColors.gradientStart,
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    'DIFY Chat History',
+                    style: TextStyle(
+                      color: AppColors.primaryText,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                  Spacer(),
+                  if (_isLoadingHistory)
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.gradientMiddle,
+                      ),
+                    )
+                  else
+                    IconButton(
+                      icon: Container(
+                        padding: EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: AppColors.cardBackground,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Icon(
+                          Icons.refresh_rounded,
+                          size: 16,
+                          color: AppColors.gradientMiddle,
+                        ),
+                      ),
+                      onPressed: _loadChatHistory,
+                      padding: EdgeInsets.zero,
+                      constraints: BoxConstraints(),
+                    ),
+                ],
+              ),
+            ),
+
+            // Chat History List
+            if (_conversationHistory.isEmpty && !_isLoadingHistory)
+              Container(
+                margin: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.cardBackground,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.borderLight, width: 1),
+                ),
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.chat_bubble_outline_rounded,
+                      color: AppColors.lightText,
+                      size: 32,
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'No DIFY conversations yet',
+                      style: TextStyle(
+                        color: AppColors.secondaryText,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Start a new conversation to begin',
+                      style: TextStyle(
+                        color: AppColors.lightText,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              )
+            else
+              ..._conversationHistory.map((conversation) {
+                final title = conversation['conversation_title'] as String;
+                final updatedAt = DateTime.parse(
+                  conversation['updated_at'] as String,
+                );
+                final timeAgo = _getTimeAgo(updatedAt);
+
+                return Container(
+                  margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: ListTile(
+                    leading: Container(
+                      padding: EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        gradient: AppColors.subtleGradient,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.chat_bubble_outline_rounded,
+                        color: AppColors.gradientStart,
+                        size: 16,
+                      ),
+                    ),
+                    title: Text(
+                      title.length > 25
+                          ? '${title.substring(0, 25)}...'
+                          : title,
+                      style: TextStyle(
+                        color: AppColors.primaryText,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      timeAgo,
+                      style: TextStyle(
+                        color: AppColors.secondaryText,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _loadConversation(conversation);
+                    },
+                    onLongPress: () {
+                      _showDeleteConversationDialog(conversation);
+                    },
+                  ),
+                );
+              }).toList(),
           ],
         ),
       ),
