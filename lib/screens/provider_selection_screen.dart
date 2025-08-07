@@ -116,7 +116,7 @@ class _ProviderSelectionScreenState extends State<ProviderSelectionScreen> {
             ),
           ),
           child: SafeArea(
-            child: Padding(
+            child: SingleChildScrollView(
               padding: const EdgeInsets.all(24.0),
               child: Column(
                 children: [
@@ -263,31 +263,29 @@ class _ProviderSelectionScreenState extends State<ProviderSelectionScreen> {
                   SizedBox(height: 40),
 
                   // Modern Provider Selection Cards
-                  Expanded(
-                    child: Column(
-                      children: [
-                        _buildProviderCard(
-                          provider: 'DIFY',
-                          title: 'DIFY AI',
-                          description:
-                              'Advanced conversational AI with natural language processing and smart responses.',
-                          icon: Icons.auto_awesome,
-                          color: AppColors.gradientStart,
-                          isSelected: false,
-                        ),
-                        SizedBox(height: 24),
-                        _buildProviderCard(
-                          provider: 'N8N',
-                          title: 'N8N Workflow',
-                          description:
-                              'Powerful automation workflows for seamless integration with various services.',
-                          icon: Icons.hub_rounded,
-                          color: AppColors.gradientEnd,
-                          isSelected: false,
-                        ),
-                      ],
-                    ),
+                  _buildProviderCard(
+                    provider: 'DIFY',
+                    title: 'DIFY AI',
+                    description:
+                        'Advanced conversational AI with natural language processing and smart responses.',
+                    icon: Icons.auto_awesome,
+                    logoPath: 'assets/images/dify-ai.png',
+                    color: AppColors.gradientStart,
+                    isSelected: false,
                   ),
+                  SizedBox(height: 24),
+                  _buildProviderCard(
+                    provider: 'N8N',
+                    title: 'N8N Workflow',
+                    description:
+                        'Powerful automation workflows for seamless integration with various services.',
+                    icon: Icons.hub_rounded,
+                    logoPath: 'assets/images/n8n-logo-1.png',
+                    color: AppColors.gradientEnd,
+                    isSelected: false,
+                  ),
+
+                  SizedBox(height: 40),
 
                   // Modern Footer Info
                   Container(
@@ -341,40 +339,34 @@ class _ProviderSelectionScreenState extends State<ProviderSelectionScreen> {
                   SizedBox(height: 24),
 
                   // Modern Version Info
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      gradient: AppColors.subtleGradient,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.verified_rounded,
+                          size: 16,
+                          color: AppColors.gradientStart,
                         ),
-                        decoration: BoxDecoration(
-                          gradient: AppColors.subtleGradient,
-                          borderRadius: BorderRadius.circular(12),
+                        SizedBox(width: 6),
+                        Text(
+                          'TSEL AI Assistant v1.0.0',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.gradientStart,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.verified_rounded,
-                              size: 16,
-                              color: AppColors.gradientStart,
-                            ),
-                            SizedBox(width: 6),
-                            Text(
-                              'TSEL AI Assistant v1.0.0',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.gradientStart,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
+
+                  SizedBox(height: 20), // Extra space at bottom
                 ],
               ),
             ),
@@ -389,6 +381,7 @@ class _ProviderSelectionScreenState extends State<ProviderSelectionScreen> {
     required String title,
     required String description,
     required IconData icon,
+    required String logoPath,
     required Color color,
     required bool isSelected,
   }) {
@@ -423,7 +416,7 @@ class _ProviderSelectionScreenState extends State<ProviderSelectionScreen> {
               padding: EdgeInsets.all(24),
               child: Row(
                 children: [
-                  // Modern icon container with gradient
+                  // Modern logo container with gradient
                   Container(
                     width: 70,
                     height: 70,
@@ -438,11 +431,24 @@ class _ProviderSelectionScreenState extends State<ProviderSelectionScreen> {
                       ),
                       borderRadius: BorderRadius.circular(18),
                       border: Border.all(
-                        color: color.withOpacity(0.3),
+                        color: Colors.white, // White border
                         width: 1,
                       ),
                     ),
-                    child: Icon(icon, color: color, size: 32),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(17),
+                      child: Container(
+                        padding: EdgeInsets.all(8),
+                        child: Image.asset(
+                          logoPath,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) {
+                            // Fallback to icon if image fails to load
+                            return Icon(icon, color: color, size: 32);
+                          },
+                        ),
+                      ),
+                    ),
                   ),
                   SizedBox(width: 20),
                   Expanded(

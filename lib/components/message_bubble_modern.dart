@@ -7,8 +7,9 @@ import '../models/chat_message.dart';
 
 class ModernMessageBubble extends StatefulWidget {
   final ChatMessage message;
+  final String? provider; // Add provider parameter
 
-  const ModernMessageBubble({Key? key, required this.message})
+  const ModernMessageBubble({Key? key, required this.message, this.provider})
     : super(key: key);
 
   @override
@@ -16,6 +17,40 @@ class ModernMessageBubble extends StatefulWidget {
 }
 
 class _ModernMessageBubbleState extends State<ModernMessageBubble> {
+  // Get appropriate bot logo based on provider
+  Widget _getBotLogo() {
+    final provider = widget.provider?.toUpperCase();
+
+    if (provider == 'DIFY') {
+      return Image.asset(
+        'assets/images/dify-ai.png',
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          return Icon(
+            Icons.auto_awesome,
+            color: AppColors.gradientStart,
+            size: 20,
+          );
+        },
+      );
+    } else if (provider == 'N8N') {
+      return Image.asset(
+        'assets/images/n8n-logo-1.png',
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          return Icon(
+            Icons.hub_rounded,
+            color: AppColors.gradientEnd,
+            size: 20,
+          );
+        },
+      );
+    } else {
+      // Default fallback icon
+      return Icon(Icons.auto_awesome, color: AppColors.gradientStart, size: 20);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -32,21 +67,23 @@ class _ModernMessageBubbleState extends State<ModernMessageBubble> {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
+                color: Colors.white, // Changed to white background
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.gradientStart.withOpacity(0.2),
+                    color: AppColors.shadowLight.withOpacity(0.1),
                     spreadRadius: 0,
                     blurRadius: 8,
                     offset: Offset(0, 2),
                   ),
                 ],
               ),
-              child: Icon(
-                Icons.auto_awesome,
-                color: AppColors.whiteText,
-                size: 20,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: EdgeInsets.all(6),
+                  child: _getBotLogo(),
+                ),
               ),
             ),
             SizedBox(width: 12),
@@ -59,7 +96,12 @@ class _ModernMessageBubbleState extends State<ModernMessageBubble> {
                 constraints: BoxConstraints(
                   maxWidth: MediaQuery.of(context).size.width * 0.75,
                 ),
-                padding: EdgeInsets.all(16),
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  16,
+                  16,
+                  8,
+                ), // Reduced bottom padding from 16 to 8
                 decoration: BoxDecoration(
                   color:
                       widget.message.isUser
@@ -308,51 +350,63 @@ class _ModernMessageBubbleState extends State<ModernMessageBubble> {
                     // Copy button and timestamp row for bot messages
                     if (!widget.message.isUser &&
                         widget.message.text.isNotEmpty) ...[
-                      SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          // Copy button on the left
-                          Tooltip(
-                            message: 'Copy to Clipboard',
-                            child: GestureDetector(
-                              onTap: _copyToClipboard,
-                              child: Container(
-                                padding: EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Colors.transparent,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Icon(
-                                  Icons.copy_rounded,
-                                  size: 20,
-                                  color: Colors.black,
+                      // Use negative margin to make it really close
+                      Transform.translate(
+                        offset: Offset(
+                          0,
+                          -8,
+                        ), // Move up by 8px to overlap slightly
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            // Copy button on the left
+                            Tooltip(
+                              message: 'Copy to Clipboard',
+                              child: GestureDetector(
+                                onTap: _copyToClipboard,
+                                child: Container(
+                                  padding: EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.transparent,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    Icons.copy_rounded,
+                                    size: 20,
+                                    color: Colors.black,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                          // Timestamp on the right
-                          Text(
-                            _formatTime(widget.message.timestamp),
-                            style: TextStyle(
-                              color: AppColors.lightText,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
+                            // Timestamp on the right
+                            Text(
+                              _formatTime(widget.message.timestamp),
+                              style: TextStyle(
+                                color: AppColors.lightText,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ],
 
                     // Timestamp only for user messages
                     if (widget.message.isUser) ...[
-                      SizedBox(height: 8),
-                      Text(
-                        _formatTime(widget.message.timestamp),
-                        style: TextStyle(
-                          color: AppColors.lightText,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
+                      // Use negative margin to make it really close
+                      Transform.translate(
+                        offset: Offset(
+                          0,
+                          -8,
+                        ), // Move up by 8px to overlap slightly
+                        child: Text(
+                          _formatTime(widget.message.timestamp),
+                          style: TextStyle(
+                            color: AppColors.lightText,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                     ],
