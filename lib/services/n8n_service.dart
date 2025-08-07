@@ -4,9 +4,9 @@ import 'package:http/http.dart' as http;
 class N8nService {
   // URL n8n instance yang akan diberikan oleh teman Anda
   static const String baseUrl =
-      'https://your-n8n-instance.com'; // Ganti dengan URL n8n yang sebenarnya
+      'https://your-n8n-instance.'; // Ganti dengan URL n8n yang sebenarnya
   static const String apiKey =
-      'YOUR_N8N_API_KEY'; // API Key n8n (jika diperlukan)
+      'YOUR_N8N_API_KEY'; // API Key n8ncom (jika diperlukan)
 
   // Webhook URLs untuk berbagai keperluan
   static const String chatWebhookUrl = '$baseUrl/webhook/chat';

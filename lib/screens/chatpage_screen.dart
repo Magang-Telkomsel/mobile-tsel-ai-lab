@@ -715,8 +715,10 @@ _Jika masalah berlanjut, hubungi administrator sistem._
   // Method untuk hapus conversation
   Future<void> _deleteConversation(Map<String, dynamic> conversation) async {
     try {
-      // TODO: Implement delete conversation method in WebChatService
-      // For now, just remove from local list
+      // Delete from storage using WebChatService
+      await _chatService.deleteConversation(conversation['id']);
+
+      // Remove from local list
       setState(() {
         _conversationHistory.removeWhere(
           (conv) => conv['id'] == conversation['id'],
@@ -726,14 +728,16 @@ _Jika masalah berlanjut, hubungi administrator sistem._
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Percakapan berhasil dihapus'),
-          backgroundColor: AppColors.accent,
+          backgroundColor: AppColors.success,
         ),
       );
+
+      print('✅ Conversation ${conversation['id']} deleted successfully');
     } catch (e) {
       print('❌ Error deleting conversation: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error menghapus percakapan'),
+          content: Text('Gagal menghapus percakapan: $e'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -893,37 +897,22 @@ _Jika masalah berlanjut, hubungi administrator sistem._
           elevation: 0,
           surfaceTintColor: Colors.transparent,
           actions: [
-            Container(
-              margin: EdgeInsets.only(right: 16),
-              padding: EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.primaryBackground,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.gradientStart.withOpacity(0.1),
-                    spreadRadius: 0,
-                    blurRadius: 4,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
+            // Logo Telkomsel yang menyatu dengan background
+            Padding(
+              padding: EdgeInsets.only(right: 16),
               child: Image.asset(
                 'assets/images/tsel.png',
-                height: 52,
-                width: 52,
+                height: 40,
+                width: 40,
+                fit: BoxFit.contain,
                 errorBuilder: (context, error, stackTrace) {
                   return Container(
-                    height: 52,
-                    width: 52,
-                    decoration: BoxDecoration(
-                      color: AppColors.gradientStart,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
+                    height: 40,
+                    width: 40,
                     child: Icon(
                       Icons.business,
-                      size: 14,
-                      color: AppColors.whiteText,
+                      size: 24,
+                      color: AppColors.gradientStart,
                     ),
                   );
                 },
