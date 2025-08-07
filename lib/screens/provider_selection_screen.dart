@@ -68,13 +68,30 @@ class _ProviderSelectionScreenState extends State<ProviderSelectionScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('selected_provider', provider);
 
-    // Navigate to home screen with selected provider
-    Navigator.pushNamedAndRemoveUntil(
-      context,
-      '/home',
-      (route) => false,
-      arguments: {'provider': provider},
-    );
+    // Navigate to specific chat screen based on provider
+    if (provider == 'N8N') {
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        '/n8n-chat',
+        (route) => false,
+        arguments: {'provider': provider},
+      );
+    } else if (provider == 'DIFY') {
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        '/dify-chat',
+        (route) => false,
+        arguments: {'provider': provider},
+      );
+    } else {
+      // Fallback to general home screen
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        '/home',
+        (route) => false,
+        arguments: {'provider': provider},
+      );
+    }
   }
 
   @override
