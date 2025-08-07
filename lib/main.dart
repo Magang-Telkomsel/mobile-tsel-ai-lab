@@ -1,5 +1,7 @@
 import 'package:difychatbot/screens/auth/login_screen.dart';
 import 'package:difychatbot/screens/chatpage_screen.dart';
+import 'package:difychatbot/screens/chat/n8n_chat_screen.dart';
+import 'package:difychatbot/screens/chat/dify_chat_screen.dart';
 import 'package:difychatbot/screens/provider_selection_screen.dart';
 import 'package:difychatbot/screens/profile_screen.dart';
 import 'package:flutter/material.dart';
@@ -78,6 +80,8 @@ class MyApp extends StatelessWidget {
           '/provider-selection': (context) => ProviderSelectionScreen(),
           '/profile': (context) => ProfileScreen(),
           '/home': (context) => ChatPageScreen(),
+          '/n8n-chat': (context) => N8NChatScreen(),
+          '/dify-chat': (context) => DifyChatScreen(),
         },
       ),
     );
