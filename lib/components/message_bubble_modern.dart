@@ -350,63 +350,53 @@ class _ModernMessageBubbleState extends State<ModernMessageBubble> {
                     // Copy button and timestamp row for bot messages
                     if (!widget.message.isUser &&
                         widget.message.text.isNotEmpty) ...[
-                      // Use negative margin to make it really close
-                      Transform.translate(
-                        offset: Offset(
-                          0,
-                          -8,
-                        ), // Move up by 8px to overlap slightly
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            // Copy button on the left
-                            Tooltip(
-                              message: 'Copy to Clipboard',
-                              child: GestureDetector(
-                                onTap: _copyToClipboard,
-                                child: Container(
-                                  padding: EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.transparent,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Icon(
-                                    Icons.copy_rounded,
-                                    size: 20,
-                                    color: Colors.black,
-                                  ),
+                      // Add proper spacing between chat and timestamp
+                      SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // Copy button on the left
+                          Tooltip(
+                            message: 'Copy to Clipboard',
+                            child: GestureDetector(
+                              onTap: _copyToClipboard,
+                              child: Container(
+                                padding: EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.transparent,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  Icons.copy_rounded,
+                                  size: 20,
+                                  color: Colors.black,
                                 ),
                               ),
                             ),
-                            // Timestamp on the right
-                            Text(
-                              _formatTime(widget.message.timestamp),
-                              style: TextStyle(
-                                color: AppColors.lightText,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                              ),
+                          ),
+                          // Timestamp on the right
+                          Text(
+                            _formatTime(widget.message.timestamp),
+                            style: TextStyle(
+                              color: AppColors.lightText,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ],
 
                     // Timestamp only for user messages
                     if (widget.message.isUser) ...[
-                      // Use negative margin to make it really close
-                      Transform.translate(
-                        offset: Offset(
-                          0,
-                          -8,
-                        ), // Move up by 8px to overlap slightly
-                        child: Text(
-                          _formatTime(widget.message.timestamp),
-                          style: TextStyle(
-                            color: AppColors.lightText,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
+                      // Add proper spacing between chat and timestamp
+                      SizedBox(height: 8),
+                      Text(
+                        _formatTime(widget.message.timestamp),
+                        style: TextStyle(
+                          color: AppColors.lightText,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
