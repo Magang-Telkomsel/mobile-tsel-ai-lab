@@ -27,6 +27,8 @@ class WebChatService {
     final conversationTitle =
         title ?? 'N8N Chat ${DateTime.now().toString().split(' ')[0]}';
 
+    print('🆕 Creating new conversation with title: "$conversationTitle"');
+
     // Generate conversation ID
     final conversationId = DateTime.now().millisecondsSinceEpoch;
 

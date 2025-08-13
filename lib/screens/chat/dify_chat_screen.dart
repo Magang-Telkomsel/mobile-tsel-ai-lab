@@ -567,12 +567,13 @@ _Jika masalah berlanjut, hubungi administrator sistem._
 
       // Filter only DIFY conversations by checking title prefix
       final difyChatHistory =
-          history
-              .where(
-                (conv) =>
-                    conv['conversation_title'].toString().startsWith('DIFY'),
-              )
-              .toList();
+          history.where((conv) {
+            final title = conv['conversation_title'].toString();
+            return title.startsWith('DIFY') ||
+                title.startsWith('dify') ||
+                title.contains('DIFY Chat') ||
+                title.contains('DIFY:');
+          }).toList();
 
       // Auto-repair corrupted data if history is empty or has issues
       if (difyChatHistory.isEmpty && history.isNotEmpty) {
@@ -1605,11 +1606,12 @@ _Jika masalah berlanjut, hubungi administrator sistem._
                 final timeAgo = _getTimeAgo(updatedAt);
 
                 return Container(
-                  margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  margin: EdgeInsets.symmetric(horizontal: 16, vertical: 0),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: ListTile(
+                    dense: true,
                     leading: Container(
                       padding: EdgeInsets.all(8),
                       decoration: BoxDecoration(
@@ -1642,7 +1644,7 @@ _Jika masalah berlanjut, hubungi administrator sistem._
                     ),
                     contentPadding: EdgeInsets.symmetric(
                       horizontal: 12,
-                      vertical: 8,
+                      vertical: 2,
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),

@@ -568,13 +568,22 @@ _Jika masalah berlanjut, hubungi administrator sistem._
         }
       });
 
+      // Filter only N8N conversations (exclude DIFY conversations)
+      final n8nChatHistory =
+          history.where((conv) {
+            final title = conv['conversation_title'].toString();
+            return !title.startsWith('DIFY') &&
+                !title.contains('DIFY Chat') &&
+                !title.contains('DIFY:');
+          }).toList();
+
       if (mounted) {
         setState(() {
-          _conversationHistory = history;
+          _conversationHistory = n8nChatHistory;
           _isLoadingHistory = false;
         });
       }
-      print('📚 Loaded ${history.length} N8N conversations');
+      print('📚 Loaded ${n8nChatHistory.length} N8N conversations');
     } catch (e) {
       print('❌ Error loading N8N chat history: $e');
 
@@ -1311,11 +1320,12 @@ _Jika masalah berlanjut, hubungi administrator sistem._
                 final timeAgo = _getTimeAgo(updatedAt);
 
                 return Container(
-                  margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  margin: EdgeInsets.symmetric(horizontal: 16, vertical: 0),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: ListTile(
+                    dense: true,
                     leading: Container(
                       padding: EdgeInsets.all(8),
                       decoration: BoxDecoration(
@@ -1348,7 +1358,7 @@ _Jika masalah berlanjut, hubungi administrator sistem._
                     ),
                     contentPadding: EdgeInsets.symmetric(
                       horizontal: 12,
-                      vertical: 8,
+                      vertical: 2,
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
