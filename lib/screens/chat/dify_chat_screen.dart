@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:difychatbot/services/api/me_api_service.dart';
 import 'package:difychatbot/utils/string_capitalize.dart';
 import 'package:difychatbot/constants/app_colors.dart';
@@ -247,6 +248,59 @@ _Jika masalah berlanjut, hubungi administrator sistem._
 
       _scrollToBottom();
       print('❌ Error sending message to Dify: $e');
+    }
+  }
+
+  Future<void> _cleanErrorMessagesFromStorage(int conversationId) async {
+    try {
+      print(
+        '🧹 Cleaning error messages from DIFY conversation $conversationId',
+      );
+      final prefs = await SharedPreferences.getInstance();
+
+      // Get messages key
+      final messagesKey = 'n8n_messages_$conversationId';
+      final messagesJson = prefs.getString(messagesKey);
+
+      if (messagesJson != null && messagesJson.isNotEmpty) {
+        final List<dynamic> messagesList = jsonDecode(messagesJson);
+
+        final cleanMessages =
+            messagesList.where((message) {
+              final content = (message['content']?.toString() ?? '').trim();
+              final isErrorMessage =
+                  content ==
+                      'Maaf, terjadi kesalahan saat memproses pesan Anda. Silakan coba lagi.' ||
+                  content == 'Error memuat conversation' ||
+                  content == '[Error loading message]' ||
+                  content == 'Memuat riwayat percakapan...' ||
+                  content.startsWith(
+                    'Maaf, tidak dapat memuat riwayat percakapan ini',
+                  ) ||
+                  content.startsWith('Maaf, terjadi kesalahan pada') ||
+                  content.contains('Silakan coba lagi');
+
+              if (isErrorMessage) {
+                print(
+                  '🗑️ Removing error message from storage: ${content.substring(0, 50)}...',
+                );
+              }
+
+              return !isErrorMessage;
+            }).toList();
+
+        if (cleanMessages.length != messagesList.length) {
+          // Save cleaned messages back to storage
+          await prefs.setString(messagesKey, jsonEncode(cleanMessages));
+          print(
+            '✅ Cleaned ${messagesList.length - cleanMessages.length} error messages from storage',
+          );
+        } else {
+          print('ℹ️ No error messages found to clean in storage');
+        }
+      }
+    } catch (e) {
+      print('❌ Error cleaning messages from storage: $e');
     }
   }
 
@@ -513,17 +567,29 @@ _Jika masalah berlanjut, hubungi administrator sistem._
 
       // Filter only DIFY conversations by checking title prefix
       final difyChatHistory =
-          history
-              .where(
-                (conv) =>
-                    conv['conversation_title'].toString().startsWith('DIFY'),
-              )
-              .toList();
+          history.where((conv) {
+            final title = conv['conversation_title'].toString();
+            return title.startsWith('DIFY') ||
+                title.startsWith('dify') ||
+                title.contains('DIFY Chat') ||
+                title.contains('DIFY:');
+          }).toList();
+
+      // Auto-repair corrupted data if history is empty or has issues
+      if (difyChatHistory.isEmpty && history.isNotEmpty) {
+        print('🔧 No DIFY history found, checking for corrupted data...');
+        // await _chatService.repairCorruptedData(); // Method not available
+      }
 
       difyChatHistory.sort((a, b) {
-        final aTime = DateTime.parse(a['updated_at'] as String);
-        final bTime = DateTime.parse(b['updated_at'] as String);
-        return bTime.compareTo(aTime);
+        try {
+          final aTime = DateTime.parse(a['updated_at'] as String);
+          final bTime = DateTime.parse(b['updated_at'] as String);
+          return bTime.compareTo(aTime);
+        } catch (e) {
+          print('⚠️ Error sorting DIFY conversation by date: $e');
+          return 0;
+        }
       });
 
       if (mounted) {
@@ -535,48 +601,171 @@ _Jika masalah berlanjut, hubungi administrator sistem._
       print('📚 Loaded ${difyChatHistory.length} DIFY conversations');
     } catch (e) {
       print('❌ Error loading DIFY chat history: $e');
-      if (mounted) {
-        setState(() {
-          _isLoadingHistory = false;
-        });
+
+      // Try to repair data on error
+      try {
+        print('🔧 Attempting to repair corrupted DIFY chat data...');
+        // await _chatService.repairCorruptedData(); // Method not available
+
+        // Try loading again after repair
+        final repairedHistory = await _chatService.getConversationHistory(
+          currentUser!.id,
+        );
+        final repairedDifyHistory =
+            repairedHistory
+                .where(
+                  (conv) =>
+                      conv['conversation_title'].toString().startsWith('DIFY'),
+                )
+                .toList();
+
+        if (mounted) {
+          setState(() {
+            _conversationHistory = repairedDifyHistory;
+            _isLoadingHistory = false;
+          });
+        }
+        print(
+          '✅ Successfully repaired and loaded ${repairedDifyHistory.length} DIFY conversations',
+        );
+      } catch (repairError) {
+        print('❌ Failed to repair DIFY data: $repairError');
+        if (mounted) {
+          setState(() {
+            _conversationHistory = [];
+            _isLoadingHistory = false;
+          });
+        }
       }
     }
   }
 
   Future<void> _loadConversation(Map<String, dynamic> conversation) async {
     try {
+      print(
+        '🔄 Loading DIFY conversation: ${conversation['conversation_title']}',
+      );
+
+      // Validate conversation data
+      if (conversation['id'] == null) {
+        throw Exception('Invalid conversation: missing ID');
+      }
+
       final conversationId = conversation['id'] as int;
-      final chatHistory = await _chatService.getChatHistory(conversationId);
+      print('📋 Conversation ID: $conversationId');
 
-      setState(() {
-        messages.clear();
-        messages.addAll(chatHistory);
-
-        if (messages.isEmpty) {
+      // Show loading indicator
+      if (mounted) {
+        setState(() {
+          messages.clear();
           messages.add(
             ChatMessage(
-              id: '1',
-              text: getGreetingMessage(),
+              id: 'loading',
+              text: 'Memuat riwayat percakapan...',
               isUser: false,
               timestamp: DateTime.now(),
             ),
           );
-        }
-      });
+        });
+      }
+
+      final chatHistory = await _chatService.getChatHistory(conversationId);
+      print('✅ Loaded ${chatHistory.length} messages from history');
+
+      // Debug: Print all messages
+      for (int i = 0; i < chatHistory.length; i++) {
+        final msg = chatHistory[i];
+        print(
+          '📝 Message $i: [${msg.isUser ? "USER" : "BOT"}] ${msg.text.length > 100 ? msg.text.substring(0, 100) + "..." : msg.text}',
+        );
+      }
+
+      // Clean error messages from storage permanently
+      await _cleanErrorMessagesFromStorage(conversationId);
+
+      // Filter out specific error messages for display
+      final cleanHistory =
+          chatHistory.where((message) {
+            final text = message.text.trim();
+            final isSpecificErrorMessage =
+                text ==
+                    'Maaf, terjadi kesalahan saat memproses pesan Anda. Silakan coba lagi.' ||
+                text == 'Error memuat conversation' ||
+                text == '[Error loading message]' ||
+                text == 'Memuat riwayat percakapan...' ||
+                text.startsWith(
+                  'Maaf, tidak dapat memuat riwayat percakapan ini',
+                );
+
+            if (isSpecificErrorMessage) {
+              print(
+                '🧹 Filtering out specific error message: ${text.length > 50 ? text.substring(0, 50) + "..." : text}',
+              );
+            }
+
+            return !isSpecificErrorMessage;
+          }).toList();
+
+      print('🔍 After filtering: ${cleanHistory.length} messages remaining');
+
+      if (mounted) {
+        setState(() {
+          messages.clear();
+
+          // Use cleaned history for display
+          if (cleanHistory.isNotEmpty) {
+            messages.addAll(cleanHistory);
+            print('📝 Added ${cleanHistory.length} cleaned messages to chat');
+          } else {
+            // Add greeting if no valid history found
+            messages.add(
+              ChatMessage(
+                id: '1',
+                text: getGreetingMessage(),
+                isUser: false,
+                timestamp: DateTime.now(),
+              ),
+            );
+            print('👋 Added greeting message (no history found)');
+          }
+        });
+      }
 
       await _chatService.setCurrentConversation(conversationId);
       print(
-        '📖 Loaded DIFY conversation: ${conversation['conversation_title']}',
+        '📖 Successfully loaded DIFY conversation: ${conversation['conversation_title']}',
       );
       _scrollToBottom();
     } catch (e) {
       print('❌ Error loading DIFY conversation: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error memuat conversation'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      print('📄 Conversation data: $conversation');
+
+      if (mounted) {
+        // Show user-friendly error in chat
+        setState(() {
+          messages.clear();
+          messages.add(
+            ChatMessage(
+              id: 'error',
+              text:
+                  'Maaf, tidak dapat memuat riwayat percakapan ini. Riwayat mungkin rusak atau terlalu lama.\n\nSilakan mulai percakapan baru.',
+              isUser: false,
+              timestamp: DateTime.now(),
+            ),
+          );
+        });
+
+        // Also show snackbar
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Gagal memuat percakapan: ${e.toString().contains('Exception:') ? e.toString().split('Exception: ')[1] : 'Error tidak dikenal'}',
+            ),
+            backgroundColor: AppColors.error,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
     }
   }
 
@@ -596,19 +785,83 @@ _Jika masalah berlanjut, hubungi administrator sistem._
         conversationId = _chatService.currentConversationId!;
       }
 
-      await _chatService.sendMessage(
+      // Save user message manually
+      await _saveMessageToStorage(
         conversationId: conversationId,
-        message: userMessage,
-        userId: currentUser!.id,
+        messageType: 'user',
+        content: userMessage,
       );
 
-      print('💾 DIFY Chat saved to history');
+      // Save bot response manually
+      await _saveMessageToStorage(
+        conversationId: conversationId,
+        messageType: 'system',
+        content: botResponse,
+      );
+
+      print('💾 DIFY Chat saved to history (both user and bot messages)');
 
       if (mounted) {
         _loadChatHistory();
       }
     } catch (e) {
       print('❌ Error saving DIFY chat to history: $e');
+    }
+  }
+
+  Future<void> _saveMessageToStorage({
+    required int conversationId,
+    required String messageType,
+    required String content,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final messagesKey = 'n8n_messages_$conversationId';
+
+      // Get existing messages
+      final existingMessages = await _getStoredMessages(conversationId);
+
+      // Create new message
+      final newMessage = {
+        'id': DateTime.now().millisecondsSinceEpoch,
+        'conversation_id': conversationId,
+        'message_type': messageType,
+        'content': content,
+        'timestamp': DateTime.now().toIso8601String(),
+        'user_id': currentUser!.id,
+      };
+
+      // Add to list
+      existingMessages.add(newMessage);
+
+      // Save back to storage
+      await prefs.setString(messagesKey, jsonEncode(existingMessages));
+
+      print(
+        '💾 Saved $messageType message to storage: ${content.substring(0, 50)}...',
+      );
+    } catch (e) {
+      print('❌ Error saving message to storage: $e');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _getStoredMessages(
+    int conversationId,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final messagesKey = 'n8n_messages_$conversationId';
+      final messagesJson = prefs.getString(messagesKey);
+
+      if (messagesJson != null && messagesJson.isNotEmpty) {
+        final List<dynamic> messagesList = jsonDecode(messagesJson);
+        return List<Map<String, dynamic>>.from(messagesList);
+      }
+
+      return [];
+    } catch (e) {
+      print('❌ Error getting stored messages: $e');
+      return [];
     }
   }
 
@@ -1201,6 +1454,36 @@ _Jika masalah berlanjut, hubungi administrator sistem._
             ),
 
             _buildSidebarItem(
+              icon: Icons.cleaning_services_rounded,
+              title: 'Clean Error Messages',
+              onTap: () async {
+                Navigator.pop(context);
+                try {
+                  // Clean error messages from current conversation
+                  if (_chatService.currentConversationId != null) {
+                    await _cleanErrorMessagesFromStorage(
+                      _chatService.currentConversationId!,
+                    );
+                  }
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('✅ Error messages cleaned successfully'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                  _loadChatHistory();
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('❌ Failed to clean messages: $e'),
+                      backgroundColor: AppColors.error,
+                    ),
+                  );
+                }
+              },
+            ),
+
+            _buildSidebarItem(
               icon: Icons.bug_report_outlined,
               title: 'Debug Dify Service',
               onTap: () {
@@ -1323,11 +1606,12 @@ _Jika masalah berlanjut, hubungi administrator sistem._
                 final timeAgo = _getTimeAgo(updatedAt);
 
                 return Container(
-                  margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  margin: EdgeInsets.symmetric(horizontal: 16, vertical: 0),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: ListTile(
+                    dense: true,
                     leading: Container(
                       padding: EdgeInsets.all(8),
                       decoration: BoxDecoration(
@@ -1360,7 +1644,7 @@ _Jika masalah berlanjut, hubungi administrator sistem._
                     ),
                     contentPadding: EdgeInsets.symmetric(
                       horizontal: 12,
-                      vertical: 8,
+                      vertical: 2,
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),

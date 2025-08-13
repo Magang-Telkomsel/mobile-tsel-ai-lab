@@ -27,6 +27,8 @@ class WebChatService {
     final conversationTitle =
         title ?? 'N8N Chat ${DateTime.now().toString().split(' ')[0]}';
 
+    print('🆕 Creating new conversation with title: "$conversationTitle"');
+
     // Generate conversation ID
     final conversationId = DateTime.now().millisecondsSinceEpoch;
 
@@ -225,16 +227,49 @@ class WebChatService {
   }
 
   Future<List<ChatMessage>> getChatHistory(int conversationId) async {
-    final messages = await _getStoredMessages(conversationId);
+    try {
+      final messages = await _getStoredMessages(conversationId);
+      print('📊 Found ${messages.length} messages in storage');
 
-    return messages.map((messageData) {
-      return ChatMessage(
-        id: messageData['id'].toString(),
-        text: messageData['content'],
-        isUser: messageData['message_type'] == 'user',
-        timestamp: DateTime.parse(messageData['created_at']),
-      );
-    }).toList();
+      return messages.map((messageData) {
+        try {
+          final content =
+              messageData['content']?.toString() ?? '[Empty message]';
+          final messageType = messageData['message_type']?.toString() ?? 'user';
+          final createdAt =
+              messageData['created_at']?.toString() ??
+              DateTime.now().toIso8601String();
+          final messageId =
+              messageData['id']?.toString() ??
+              DateTime.now().millisecondsSinceEpoch.toString();
+
+          print(
+            '📄 Message ID: $messageId, Type: $messageType, Content: ${content.length > 50 ? content.substring(0, 50) + "..." : content}',
+          );
+
+          return ChatMessage(
+            id: messageId,
+            text: content,
+            isUser: messageType == 'user',
+            timestamp: DateTime.parse(createdAt),
+          );
+        } catch (e) {
+          print('❌ Error parsing message: $e');
+          print('📄 Raw message data: $messageData');
+
+          // Return a fallback message if parsing fails
+          return ChatMessage(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            text: '[Error loading message]',
+            isUser: false,
+            timestamp: DateTime.now(),
+          );
+        }
+      }).toList();
+    } catch (e) {
+      print('❌ Error in getChatHistory: $e');
+      return [];
+    }
   }
 
   // ==========================================
@@ -281,6 +316,19 @@ class WebChatService {
 
     _currentConversationId = null;
     print('🗑️ All chat history cleared');
+  }
+
+  Future<void> saveBotResponse({
+    required int conversationId,
+    required String content,
+    Map<String, dynamic>? metadata,
+  }) async {
+    await _saveMessageToStorage(
+      conversationId: conversationId,
+      messageType: 'system',
+      content: content,
+      metadata: metadata ?? {},
+    );
   }
 
   Future<void> deleteConversation(int conversationId) async {

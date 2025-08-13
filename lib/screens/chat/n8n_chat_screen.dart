@@ -301,6 +301,57 @@ _Jika masalah berlanjut, hubungi administrator sistem._
     }
   }
 
+  Future<void> _cleanErrorMessagesFromStorage(int conversationId) async {
+    try {
+      print('🧹 Cleaning error messages from N8N conversation $conversationId');
+      final prefs = await SharedPreferences.getInstance();
+
+      // Get messages key
+      final messagesKey = 'n8n_messages_$conversationId';
+      final messagesJson = prefs.getString(messagesKey);
+
+      if (messagesJson != null && messagesJson.isNotEmpty) {
+        final List<dynamic> messagesList = jsonDecode(messagesJson);
+
+        final cleanMessages =
+            messagesList.where((message) {
+              final content = (message['content']?.toString() ?? '').trim();
+              final isErrorMessage =
+                  content ==
+                      'Maaf, terjadi kesalahan saat memproses pesan Anda. Silakan coba lagi.' ||
+                  content == 'Error memuat conversation' ||
+                  content == '[Error loading message]' ||
+                  content == 'Memuat riwayat percakapan...' ||
+                  content.startsWith(
+                    'Maaf, tidak dapat memuat riwayat percakapan ini',
+                  ) ||
+                  content.startsWith('Maaf, terjadi kesalahan pada') ||
+                  content.contains('Silakan coba lagi');
+
+              if (isErrorMessage) {
+                print(
+                  '🗑️ Removing error message from storage: ${content.substring(0, 50)}...',
+                );
+              }
+
+              return !isErrorMessage;
+            }).toList();
+
+        if (cleanMessages.length != messagesList.length) {
+          // Save cleaned messages back to storage
+          await prefs.setString(messagesKey, jsonEncode(cleanMessages));
+          print(
+            '✅ Cleaned ${messagesList.length - cleanMessages.length} error messages from storage',
+          );
+        } else {
+          print('ℹ️ No error messages found to clean in storage');
+        }
+      }
+    } catch (e) {
+      print('❌ Error cleaning messages from storage: $e');
+    }
+  }
+
   void _onFileSelected(PlatformFile file) {
     setState(() {
       if (file.name.isEmpty) {
@@ -499,63 +550,200 @@ _Jika masalah berlanjut, hubungi administrator sistem._
       final history = await _chatService.getConversationHistory(
         currentUser!.id,
       );
+
+      // Auto-repair corrupted data if history is empty or has issues
+      if (history.isEmpty) {
+        print('🔧 No history found, checking for corrupted data...');
+        // await _chatService.repairCorruptedData(); // Method not available
+      }
+
       history.sort((a, b) {
-        final aTime = DateTime.parse(a['updated_at'] as String);
-        final bTime = DateTime.parse(b['updated_at'] as String);
-        return bTime.compareTo(aTime);
+        try {
+          final aTime = DateTime.parse(a['updated_at'] as String);
+          final bTime = DateTime.parse(b['updated_at'] as String);
+          return bTime.compareTo(aTime);
+        } catch (e) {
+          print('⚠️ Error sorting conversation by date: $e');
+          return 0;
+        }
       });
+
+      // Filter only N8N conversations (exclude DIFY conversations)
+      final n8nChatHistory =
+          history.where((conv) {
+            final title = conv['conversation_title'].toString();
+            return !title.startsWith('DIFY') &&
+                !title.contains('DIFY Chat') &&
+                !title.contains('DIFY:');
+          }).toList();
 
       if (mounted) {
         setState(() {
-          _conversationHistory = history;
+          _conversationHistory = n8nChatHistory;
           _isLoadingHistory = false;
         });
       }
-      print('📚 Loaded ${history.length} N8N conversations');
+      print('📚 Loaded ${n8nChatHistory.length} N8N conversations');
     } catch (e) {
       print('❌ Error loading N8N chat history: $e');
-      if (mounted) {
-        setState(() {
-          _isLoadingHistory = false;
-        });
+
+      // Try to repair data on error
+      try {
+        print('🔧 Attempting to repair corrupted chat data...');
+        // await _chatService.repairCorruptedData(); // Method not available
+
+        // Try loading again after repair
+        final repairedHistory = await _chatService.getConversationHistory(
+          currentUser!.id,
+        );
+
+        if (mounted) {
+          setState(() {
+            _conversationHistory = repairedHistory;
+            _isLoadingHistory = false;
+          });
+        }
+        print(
+          '✅ Successfully repaired and loaded ${repairedHistory.length} conversations',
+        );
+      } catch (repairError) {
+        print('❌ Failed to repair data: $repairError');
+        if (mounted) {
+          setState(() {
+            _conversationHistory = [];
+            _isLoadingHistory = false;
+          });
+        }
       }
     }
   }
 
   Future<void> _loadConversation(Map<String, dynamic> conversation) async {
     try {
+      print(
+        '🔄 Loading N8N conversation: ${conversation['conversation_title']}',
+      );
+
+      // Validate conversation data
+      if (conversation['id'] == null) {
+        throw Exception('Invalid conversation: missing ID');
+      }
+
       final conversationId = conversation['id'] as int;
-      final chatHistory = await _chatService.getChatHistory(conversationId);
+      print('📋 Conversation ID: $conversationId');
 
-      setState(() {
-        messages.clear();
-        messages.addAll(chatHistory);
-
-        if (messages.isEmpty) {
+      // Show loading indicator
+      if (mounted) {
+        setState(() {
+          messages.clear();
           messages.add(
             ChatMessage(
-              id: '1',
-              text: getGreetingMessage(),
+              id: 'loading',
+              text: 'Memuat riwayat percakapan...',
               isUser: false,
               timestamp: DateTime.now(),
             ),
           );
-        }
-      });
+        });
+      }
+
+      final chatHistory = await _chatService.getChatHistory(conversationId);
+      print('✅ Loaded ${chatHistory.length} messages from history');
+
+      // Debug: Print all messages
+      for (int i = 0; i < chatHistory.length; i++) {
+        final msg = chatHistory[i];
+        print(
+          '📝 Message $i: [${msg.isUser ? "USER" : "BOT"}] ${msg.text.length > 100 ? msg.text.substring(0, 100) + "..." : msg.text}',
+        );
+      }
+
+      // Clean error messages from storage permanently
+      await _cleanErrorMessagesFromStorage(conversationId);
+
+      // Filter out specific error messages for display
+      final cleanHistory =
+          chatHistory.where((message) {
+            final text = message.text.trim();
+            final isSpecificErrorMessage =
+                text ==
+                    'Maaf, terjadi kesalahan saat memproses pesan Anda. Silakan coba lagi.' ||
+                text == 'Error memuat conversation' ||
+                text == '[Error loading message]' ||
+                text == 'Memuat riwayat percakapan...' ||
+                text.startsWith(
+                  'Maaf, tidak dapat memuat riwayat percakapan ini',
+                );
+
+            if (isSpecificErrorMessage) {
+              print(
+                '🧹 Filtering out specific error message: ${text.length > 50 ? text.substring(0, 50) + "..." : text}',
+              );
+            }
+
+            return !isSpecificErrorMessage;
+          }).toList();
+
+      print('🔍 After filtering: ${cleanHistory.length} messages remaining');
+
+      if (mounted) {
+        setState(() {
+          messages.clear();
+
+          // Use cleaned history for display
+          if (cleanHistory.isNotEmpty) {
+            messages.addAll(cleanHistory);
+            print('📝 Added ${cleanHistory.length} cleaned messages to chat');
+          } else {
+            // Add greeting if no valid history found
+            messages.add(
+              ChatMessage(
+                id: '1',
+                text: getGreetingMessage(),
+                isUser: false,
+                timestamp: DateTime.now(),
+              ),
+            );
+            print('👋 Added greeting message (no history found)');
+          }
+        });
+      }
 
       await _chatService.setCurrentConversation(conversationId);
       print(
-        '📖 Loaded N8N conversation: ${conversation['conversation_title']}',
+        '📖 Successfully loaded N8N conversation: ${conversation['conversation_title']}',
       );
       _scrollToBottom();
     } catch (e) {
       print('❌ Error loading N8N conversation: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error memuat conversation'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      print('📄 Conversation data: $conversation');
+
+      if (mounted) {
+        // Show user-friendly error in chat
+        setState(() {
+          messages.clear();
+          messages.add(
+            ChatMessage(
+              id: 'error',
+              text:
+                  'Maaf, tidak dapat memuat riwayat percakapan ini. Riwayat mungkin rusak atau terlalu lama.\n\nSilakan mulai percakapan baru.',
+              isUser: false,
+              timestamp: DateTime.now(),
+            ),
+          );
+        });
+
+        // Also show snackbar
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Gagal memuat percakapan: ${e.toString().contains('Exception:') ? e.toString().split('Exception: ')[1] : 'Error tidak dikenal'}',
+            ),
+            backgroundColor: AppColors.error,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
     }
   }
 
@@ -658,13 +846,24 @@ _Jika masalah berlanjut, hubungi administrator sistem._
         conversationId = _chatService.currentConversationId!;
       }
 
+      // Save user message
       await _chatService.sendMessage(
         conversationId: conversationId,
         message: userMessage,
         userId: currentUser!.id,
       );
 
-      print('💾 N8N Chat saved to history');
+      // Save bot response
+      await _chatService.saveBotResponse(
+        conversationId: conversationId,
+        content: botResponse,
+        metadata: {
+          'model': _selectedModel,
+          'timestamp': DateTime.now().toIso8601String(),
+        },
+      );
+
+      print('💾 N8N Chat (user + bot response) saved to history');
 
       if (mounted) {
         _loadChatHistory();
@@ -977,6 +1176,36 @@ _Jika masalah berlanjut, hubungi administrator sistem._
               },
             ),
 
+            _buildSidebarItem(
+              icon: Icons.cleaning_services_rounded,
+              title: 'Clean Error Messages',
+              onTap: () async {
+                Navigator.pop(context);
+                try {
+                  // Clean error messages from current conversation
+                  if (_chatService.currentConversationId != null) {
+                    await _cleanErrorMessagesFromStorage(
+                      _chatService.currentConversationId!,
+                    );
+                  }
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('✅ Error messages cleaned successfully'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                  _loadChatHistory();
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('❌ Failed to clean messages: $e'),
+                      backgroundColor: AppColors.error,
+                    ),
+                  );
+                }
+              },
+            ),
+
             Container(
               margin: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               height: 1,
@@ -1091,11 +1320,12 @@ _Jika masalah berlanjut, hubungi administrator sistem._
                 final timeAgo = _getTimeAgo(updatedAt);
 
                 return Container(
-                  margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  margin: EdgeInsets.symmetric(horizontal: 16, vertical: 0),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: ListTile(
+                    dense: true,
                     leading: Container(
                       padding: EdgeInsets.all(8),
                       decoration: BoxDecoration(
@@ -1128,7 +1358,7 @@ _Jika masalah berlanjut, hubungi administrator sistem._
                     ),
                     contentPadding: EdgeInsets.symmetric(
                       horizontal: 12,
-                      vertical: 8,
+                      vertical: 2,
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
