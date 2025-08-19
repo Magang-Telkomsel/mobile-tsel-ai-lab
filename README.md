@@ -1,16 +1,32 @@
-# difychatbot
+# 🚀 Cara Menjalankan Flutter
+ 
+### 1. Clone project
+```bash
+git clone https://github.com/Magang-Telkomsel/mobile-tsel-ai-lab.git
+```
+### 2. Download Depedencies
+```bash
+cd mobile-tsel-ai-lab
+flutter pub get
+```
+### 3. Set up env 
+```bash
+#DB URL
+API_URL=*******************
 
-A new Flutter project.
+#N8N Local URLs
+N8N_URL_PROD=*******************
+N8N_URL_DEV=*******************
 
-## Getting Started
+#N8N Tsel Server URLs
+N8N_TSEL_URL_PROD=*******************
+N8N_TSEL_URL_DEV=*******************
 
-This project is a starting point for a Flutter application.
+#Dify URL
+DIFY_URL=*******************
+```
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+### 4. Jalankan Project 
+```bash
+flutter run
+```

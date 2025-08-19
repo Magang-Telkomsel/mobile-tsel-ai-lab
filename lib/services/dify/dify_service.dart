@@ -1,7 +1,9 @@
+import 'package:difychatbot/services/api/me_api_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dify_prompt_api_service.dart';
+import '../../models/upload_file_dify_response.dart';
 
 class DifyService {
   final DifyPromptApiService _apiService = DifyPromptApiService();
@@ -24,6 +26,7 @@ class DifyService {
     PlatformFile? file, // Add file parameter
   }) async {
     try {
+      var userID = await meAPI().getUserProfile();
       print('📡 Using Dify API Service for message: $message');
       print('🤖 Model: $model');
 
@@ -76,6 +79,40 @@ class DifyService {
   // Test Dify API connection
   Future<bool> testConnection() async {
     return await _apiService.testConnection();
+  }
+
+  // Test upload endpoint
+  Future<void> testUploadEndpoint() async {
+    await _apiService.testUploadEndpoint();
+  }
+
+  // Tampilkan contoh format request
+  void showRequestFormatExample() {
+    _apiService.showRequestFormatExample();
+  }
+
+  // Upload file with detailed response model
+  Future<UploadFileDifyResponse?> uploadFile(PlatformFile file) async {
+    try {
+      print('📤 DifyService: Uploading file ${file.name}');
+      final uploadResponse = await _apiService.uploadFileToDify(file);
+
+      if (uploadResponse != null) {
+        print('✅ DifyService: File uploaded successfully');
+        print('🆔 File ID: ${uploadResponse.id}');
+        print('📄 File Name: ${uploadResponse.name}');
+        print('📊 File Size: ${uploadResponse.size} bytes');
+        print('📎 Extension: ${uploadResponse.extension}');
+        print('🎭 MIME Type: ${uploadResponse.mimeType}');
+      } else {
+        print('❌ DifyService: File upload failed');
+      }
+
+      return uploadResponse;
+    } catch (e) {
+      print('❌ DifyService: Error uploading file: $e');
+      return null;
+    }
   }
 
   // Get default response for Dify (single general response)

@@ -108,6 +108,7 @@ class _DifyChatScreenState extends State<DifyChatScreen> {
         Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         currentUser = null;
         isLoading = false;
@@ -1059,6 +1060,26 @@ _Jika masalah berlanjut, hubungi administrator sistem._
           elevation: 0,
           surfaceTintColor: Colors.transparent,
           actions: [
+            // Debug button for upload testing
+            IconButton(
+              icon: Container(
+                padding: EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  gradient: AppColors.subtleGradient,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.bug_report,
+                  color: AppColors.gradientStart,
+                  size: 20,
+                ),
+              ),
+              onPressed: () async {
+                print('🔧 Testing Dify upload endpoint...');
+                final difyService = DifyService();
+                await difyService.testUploadEndpoint();
+              },
+            ),
             Container(
               margin: EdgeInsets.only(right: 16),
               child: Image.asset(

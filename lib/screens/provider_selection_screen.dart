@@ -52,6 +52,7 @@ class _ProviderSelectionScreenState extends State<ProviderSelectionScreen> {
         Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         currentUser = null;
         isUserInfoLoading = false;
