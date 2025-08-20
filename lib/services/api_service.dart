@@ -5,10 +5,10 @@ import '../models/user.dart';
 import '../models/api_response.dart';
 
 class ApiService {
-  // Untuk Web (Chrome/Edge)
-  static const String baseUrl = 'http://localhost:8000/api';
-  // static const String baseUrl = 'http://10.0.2.2:8000/api'; // Untuk Android Emulator
-  // static const String baseUrl = 'http://192.168.1.100:8000/api'; // Untuk Real Device
+  // Untuk Web (Chrome/Edge) - Backend Express.js
+  static const String baseUrl = 'http://localhost:4000/auth-api';
+  // static const String baseUrl = 'http://10.0.2.2:4000/auth-api'; // Untuk Android Emulator
+  // static const String baseUrl = 'http://192.168.1.100:4000/auth-api'; // Untuk Real Device
 
   static const FlutterSecureStorage _storage = FlutterSecureStorage();
 
@@ -46,25 +46,24 @@ class ApiService {
   }) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/auth/register'),
+        Uri.parse('$baseUrl/post/register'),
         headers: await _getHeaders(),
         body: jsonEncode({
-          'name': name,
+          'nama_depan': name,
+          'nama_belakang': '', // Backend expects nama_depan and nama_belakang
           'email': email,
           'password': password,
-          'password_confirmation': passwordConfirmation,
         }),
       );
 
       final Map<String, dynamic> data = jsonDecode(response.body);
 
-      if (response.statusCode == 201) {
-        final authResponse = AuthResponse.fromJson(data['data']);
-        await saveToken(authResponse.token);
+      if (response.statusCode == 200) {
+        // For register, backend doesn't return auth data, just success message
         return ApiResponse<AuthResponse>(
           success: true,
           message: data['message'],
-          data: authResponse,
+          data: null,
         );
       } else {
         return ApiResponse<AuthResponse>(

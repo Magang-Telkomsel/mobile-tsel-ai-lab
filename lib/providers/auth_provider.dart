@@ -53,8 +53,9 @@ class AuthProvider with ChangeNotifier {
       passwordConfirmation: passwordConfirmation,
     );
 
-    if (response.success && response.data != null) {
-      _user = response.data!.user;
+    if (response.success) {
+      // Registration successful - set authenticated to true
+      // Note: Backend register doesn't return user data, just success message
       _isAuthenticated = true;
       _isLoading = false;
       notifyListeners();
