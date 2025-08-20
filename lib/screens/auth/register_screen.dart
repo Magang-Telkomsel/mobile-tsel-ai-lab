@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:difychatbot/constants/app_colors.dart';
-import '../../providers/auth_provider.dart';
+import '../../services/api/sign_in_api_service.dart';
+import '../../models/signin_response.dart';
 import '../provider_selection_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -11,7 +11,8 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -19,9 +20,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
 
+  final SignInApiService _signInApiService = SignInApiService();
+
   @override
   void dispose() {
-    _nameController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -35,36 +39,78 @@ class _RegisterScreenState extends State<RegisterScreen> {
       });
 
       try {
-        final authProvider = Provider.of<AuthProvider>(context, listen: false);
-
-        final errorMessage = await authProvider.register(
-          name: _nameController.text.trim(),
-          email: _emailController.text.trim(),
-          password: _passwordController.text,
-          passwordConfirmation: _confirmPasswordController.text,
+        final SigninResponse result = await _signInApiService.signIn(
+          _firstNameController.text.trim(),
+          _lastNameController.text.trim(),
+          _emailController.text.trim(),
+          _passwordController.text,
         );
 
         setState(() {
           _isLoading = false;
         });
 
-        if (errorMessage == null) {
+        print('📥 Registration result: $result');
+
+        if (result.success == true) {
           // Registration berhasil
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => ProviderSelectionScreen()),
-          );
-        } else {
-          // Registration gagal - tampilkan pesan error
           showDialog(
             context: context,
             builder:
                 (context) => AlertDialog(
-                  title: Text('Registration Failed'),
-                  content: Text(errorMessage),
+                  title: Text(
+                    'Success',
+                    style: TextStyle(color: AppColors.primaryText),
+                  ),
+                  backgroundColor: AppColors.cardBackground,
+                  content: Text(
+                    result.message.isNotEmpty
+                        ? result.message
+                        : 'Account created successfully!',
+                    style: TextStyle(color: AppColors.secondaryText),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(
+                            builder: (context) => ProviderSelectionScreen(),
+                          ),
+                        );
+                      },
+                      child: Text(
+                        'OK',
+                        style: TextStyle(color: AppColors.gradientStart),
+                      ),
+                    ),
+                  ],
+                ),
+          );
+        } else {
+          // Registration gagal
+          showDialog(
+            context: context,
+            builder:
+                (context) => AlertDialog(
+                  title: Text(
+                    'Registration Failed',
+                    style: TextStyle(color: AppColors.error),
+                  ),
+                  backgroundColor: AppColors.cardBackground,
+                  content: Text(
+                    result.message.isNotEmpty
+                        ? result.message
+                        : 'Registration failed. Please try again.',
+                    style: TextStyle(color: AppColors.secondaryText),
+                  ),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      child: Text('OK'),
+                      child: Text(
+                        'OK',
+                        style: TextStyle(color: AppColors.gradientStart),
+                      ),
                     ),
                   ],
                 ),
@@ -79,12 +125,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
           context: context,
           builder:
               (context) => AlertDialog(
-                title: Text('Error'),
-                content: Text('Terjadi kesalahan: $e'),
+                title: Text('Error', style: TextStyle(color: AppColors.error)),
+                backgroundColor: AppColors.cardBackground,
+                content: Text(
+                  'Network error. Please check your connection and try again.',
+                  style: TextStyle(color: AppColors.secondaryText),
+                ),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    child: Text('OK'),
+                    child: Text(
+                      'OK',
+                      style: TextStyle(color: AppColors.gradientStart),
+                    ),
                   ),
                 ],
               ),
@@ -221,13 +274,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 ],
                               ),
                               child: TextFormField(
-                                controller: _nameController,
+                                controller: _firstNameController,
                                 style: TextStyle(
                                   color: AppColors.primaryText,
                                   fontWeight: FontWeight.w500,
                                 ),
                                 decoration: InputDecoration(
-                                  labelText: 'Full Name',
+                                  labelText: 'First Name',
                                   labelStyle: TextStyle(
                                     color: AppColors.secondaryText,
                                     fontWeight: FontWeight.w500,
@@ -290,7 +343,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 textInputAction: TextInputAction.next,
                                 validator: (value) {
                                   if (value == null || value.isEmpty) {
-                                    return 'Please enter your full name';
+                                    return 'Please enter your First Name';
                                   }
                                   if (value.length < 2) {
                                     return 'Name must be at least 2 characters';
@@ -301,6 +354,98 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ),
                             SizedBox(height: 20),
 
+                            Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.shadowLight,
+                                    spreadRadius: 0,
+                                    blurRadius: 8,
+                                    offset: Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: TextFormField(
+                                controller: _lastNameController,
+                                style: TextStyle(
+                                  color: AppColors.primaryText,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                decoration: InputDecoration(
+                                  labelText: 'Last Name',
+                                  labelStyle: TextStyle(
+                                    color: AppColors.secondaryText,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  prefixIcon: Container(
+                                    margin: EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      gradient: AppColors.subtleGradient,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Icon(
+                                      Icons.person_outline,
+                                      color: AppColors.gradientStart,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  filled: true,
+                                  fillColor: AppColors.cardBackground,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                    borderSide: BorderSide(
+                                      color: AppColors.borderLight,
+                                      width: 1,
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                    borderSide: BorderSide(
+                                      color: AppColors.gradientMiddle,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  errorBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                    borderSide: BorderSide(
+                                      color: AppColors.error,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  focusedErrorBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                    borderSide: BorderSide(
+                                      color: AppColors.error,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  errorStyle: TextStyle(
+                                    color: AppColors.error,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                    vertical: 16,
+                                  ),
+                                ),
+                                textInputAction: TextInputAction.next,
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Please enter your last name';
+                                  }
+                                  if (value.length < 2) {
+                                    return 'Name must be at least 2 characters';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ),
+                            SizedBox(height: 20),
                             // Modern Email Field
                             Container(
                               decoration: BoxDecoration(
